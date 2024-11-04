@@ -337,54 +337,6 @@ double IoUScore(Size size, vector<Point> &p1, vector<Point> &p2) {
     return intersectCount / unCount;
 }
 
-enum ConfMat {
-    TP = 0,
-    FP,
-    TN,
-    FN
-};
-
-struct score {
-    double iou;
-    ConfMat type;
-
-    bool operator<(const score& a) {
-        return iou < a.iou;
-    }
-};
-
-double calMAP(vector<score>& scores) {
-    vector<pair<double, double>> pr;
-    pr.push_back({ 1., 0. });
-
-    int tp = 0;
-    int fp = 0;
-
-    for (auto& s : scores) {
-        if (s.type == FP)
-            fp++;
-        if (s.type == TP)
-            tp++;
-
-        if (tp == 0 && fp == 0)
-            pr.push_back({ 1., 0 });
-        else
-            pr.push_back({ (double) tp / (tp + fp), (double)tp / scores.size()});
-        std::cout << s.iou << std::endl;
-    }
-
-    auto start = pr[0];
-    double res = 0;
-
-    for (auto p : pr) {
-        std::cout << p.first << " " << p.second << std::endl;
-        res += ((start.first + p.first) / 2) * (p.second - start.second);
-        start = p;
-    }
-
-    return res;
-}
-
 int main(int argc, const char** argv)
 {
     auto path = filesystem::current_path().append("carPlate");
@@ -393,8 +345,6 @@ int main(int argc, const char** argv)
     auto lattersMask = loadMasks(path / fs::path("lattersMask"));
 
     map<string, ImageData> data = loadData(path / "data" / "data.txt");
-
-    vector<score> scores;
 
     for (const auto& dirEntry : fs::directory_iterator(path)) {
         if (fs::is_regular_file(dirEntry)) {
@@ -484,11 +434,9 @@ int main(int argc, const char** argv)
             auto end = chrono::steady_clock::now();
             cout << "Time: " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms" << endl;
             if (data.find(filename) != data.end()) {
-                for (auto &p : potentialPlateContours) {
-                    double iou = IoUScore(image.size(), data[filename].plate, p);
-                    scores.push_back({ iou, (iou < 0.7 ? (plate.empty() ? FN : FP) : TP)});
-                }
-                // cout << "IoU score: " << iou << endl;
+                double iou = IoUScore(image.size(), data[filename].plate, plate);
+
+                cout << "IoU score: " << iou << endl;
                 // Вывод информации о распозновании
                 if (plateValue != data[filename].value)
                     cout << "ERROR! For file: " << filename << ", expected: " << data[filename].value << ", got: " << plateValue << endl;
@@ -503,10 +451,6 @@ int main(int argc, const char** argv)
             cout << endl;
         }
     }
-
-    sort(scores.rbegin(), scores.rend());
-
-    std::cout << calMAP(scores) << std::endl;
 
     cv::waitKey();
 
